@@ -44,16 +44,6 @@ apt-get --assume-yes install gcc \
     qemu-utils
 pip3 install ovirt-engine-sdk-python
 ```
-## Clone repo
-```bash
-git clone https://gitlab.hua.gr/thkam/ovirtbackup
-```
-
-if for some reason you get a `server certificate verification failed. CAfile: none CRLfile: none` try to issue:
-```bash
-export GIT_SSL_NO_VERIFY=1
-```
-
 ## Modes
 There are two modes you can use the `ovirt-savior` script: backup and restore. In backup mode, you download the VM disks to a local or remote folder. In restore mode, you create a VM using the OVirt API and then upload the discs. You have the option of collapsing the original VM's snapshots on the restored VM and this is probably your safest bet on getting the VM to work again. There seems to be a bug in OVirt that extends the snapshot disc image beyond its maximum size and although this does not affect the original running VM, it prohibits uploading the discs to the restored VMs.
 
