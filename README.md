@@ -113,8 +113,6 @@ This section describes the parameters used during the restoration process.
 - `storage_domain`: the name of the storage domain where the VM will be restored (e.g. `vm_storage`).
 - `cluster_name` : the name of the cluster where the VM will be restored. (e.g. `Default`)
 - `template` : you could use this to define a template where the VM is based but since it is restored you should leave it equal to `Blank`.
-- `commit` : if this is set to `yes` then all snapshot on the disks are collapsed on the restored VM. This is the preferred mode of operation to save disk space and avoid certain bugs of the Ovirt disk provisioning.
-- `copy_to_local` : if this is set to `yes` the disks are first copied to the `local_directory` before the restoration. Use this especially if you set the `commit` option to `yes` because otherwise the snapshots will collapse on the working backup folder.
 
 #### Snapshot section
 - `backup_snapshot_description` is the name of a temporary snapshot used to backup VMs (e.g. SAVIOR_BACKUP_SNAPSHOT)
