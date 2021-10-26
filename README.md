@@ -167,7 +167,7 @@ sudo mount 195.130.90.2:/var/nfs/backup /nfs/backup
 df -h
 ```
 
-To mount the folder at boot append the following line to `\etc\fstab`
+To mount the folder at boot append the following line to `/etc/fstab`
 ```
 195.130.90.2:/var/nfs/backup    /nfs/backup     nfs  auto,nofail,noatime,nolock,intr,tcp,actimeo=1800 0 0
 ```
