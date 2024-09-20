@@ -13,7 +13,7 @@ _Ovirtsavior_ was created due to the support of the [Study in Greece](https://st
 
 ## Disclaimer
 
-Use the software **at your own risk**. This has not been heavily tested in production environments. We suggest running the scripts on Ubuntu 20.04. It should work on Ovirt 4.3 and 4.4 engines.
+Use the software **at your own risk**. This has not been heavily tested in production environments. We suggest running the scripts on Ubuntu 20.04. It tested work on Ovirt 4.5 engines.
 
 ## VM backup & restore
 
