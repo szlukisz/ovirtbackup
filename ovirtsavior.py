@@ -14,7 +14,7 @@ RESTORE_SECTIONS = ['RESTORATION']
 
 REQUIRED_PARAMS = ['ca_file', 'username', 'password', 'ovirt_url', 'working_directory', 'chunk_size', 'vm_name']
 RESTORE_PARAMS = ['storage_domain', 'cluster_name', 'template', 'new_vm_name']
-BACKUP_PARAMS = ['backup_snapshot_description']
+BACKUP_PARAMS = ['backup_snapshot_description','backup_snapshot_description_temp']
 COPY_TO_LOCAL_PARAMS = ['local_directory']
 GLOBAL_LOGGER_FILE = 'global_savior.log'
 MAIL_SUBJECT = '{{mode}} of {{vm_name}} on {{date}}: {{status}}'
@@ -65,8 +65,18 @@ class savior_job:
 
     def execute(self):
 
-        if self.mode == 'backup':
+        if self.mode == 'backuptemp':
+            #self.snapshot_name = self.params['backup_snapshot_description'] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
+            self.snapshot_name = self.params['backup_snapshot_description']
+            l.info('Working on backup mode for VM %s', self.vm_name)
+            #self.check_backup_directory()
+            self.get_backup_vm()
+            self.remove_backup_snapshot()
+            self.add_backup_snapshot()
+
+        elif self.mode == 'backup':
             self.snapshot_name = self.params['backup_snapshot_description'] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
+            #self.snapshot_name = self.params['backup_snapshot_description']
             l.info('Working on backup mode for VM %s', self.vm_name)
             self.check_backup_directory()
             self.get_backup_vm()
@@ -101,7 +111,7 @@ class savior_job:
             raise ValueError(msg)
 
     def check_sections(self):
-        if self.mode == 'backup':
+        if self.mode == 'backup' or self.mode == 'backuptemp':
             self.required_sections = REQUIRED_SECTIONS + BACKUP_SECTIONS
         else:
             self.required_sections = REQUIRED_SECTIONS + RESTORE_SECTIONS
@@ -121,7 +131,7 @@ class savior_job:
 
     def check_params(self):
         self.check_missing(REQUIRED_PARAMS)
-        if self.mode == 'backup':
+        if self.mode == 'backup' or self.mode == 'backuptemp':
             self.check_missing(BACKUP_PARAMS)
         elif self.mode == 'restore':
             self.check_missing(RESTORE_PARAMS)
