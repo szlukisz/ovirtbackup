@@ -592,6 +592,8 @@ class VM:
 
     def remove_snapshot(self, description):
         snap = self.get_snapshot_by_description(description)
+        if not snap:
+            return
         snap.wait_for_all_disks_ok()
         snap.remove()
         while True:

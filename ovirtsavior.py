@@ -94,17 +94,16 @@ class savior_job:
             self.add_backup_snapshot()
 
         elif self.mode == "backup":
-            self.snapshot_name = self.params[
-                "backup_snapshot_description"
-            ] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
-            # self.snapshot_name = self.params['backup_snapshot_description']
+            # self.snapshot_name = self.params['backup_snapshot_description'] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
+            self.snapshot_name = self.params['backup_snapshot_description']
             l.info("Working on backup mode for VM %s", self.vm_name)
             self.check_backup_directory()
             self.get_backup_vm()
+            self.remove_backup_snapshot()
             self.add_backup_snapshot()
             self.download_disks()
             self.save_vm_info()
-            self.remove_backup_snapshot()
+            ##self.remove_backup_snapshot()
 
         elif self.mode == "restore":
             l.info("Working on restore mode for VM %s", self.vm_name)
