@@ -1,5 +1,6 @@
 import argparse
 from paramiko import SSHClient
+from paramiko.client import AutoAddPolicy
 from paramiko.ssh_exception import NoValidConnectionsError
 import configparser
 from backup_lib import OvirtHandler, copy_file, main_logger, VM_LOGGER_FILE
@@ -212,6 +213,7 @@ class SaviorJob:
         try:
             self.client = SSHClient()
             self.client.load_system_host_keys()
+            self.client.set_missing_host_key_policy(AutoAddPolicy())
             self.client.connect(ip, username=username, password=password)
             main_logger.info("Connected successfully")
         except NoValidConnectionsError as err:
