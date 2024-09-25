@@ -58,7 +58,7 @@ def logger():
     return logger
 
 
-l = logger()
+main_logger = logger()
 
 
 def rate_str(rate):
@@ -116,7 +116,7 @@ class transfer_bar:
         return rate_str(rate)
 
     def progress(self, counter):
-        percentage = counter / self.expected_size * 100
+        # percentage = counter / self.expected_size * 100
         return (
             self.bar(counter)
             + " "
@@ -133,12 +133,12 @@ class transfer_bar:
         if counter >= self.last_report + self.report_every:
             msg = self.progress(counter)
             self.last_report = counter
-            l.debug(msg)
+            main_logger.debug(msg)
 
     def show_final_progress(self, counter):
         msg = self.progress(counter)
         self.last_report = counter
-        l.debug(msg)
+        main_logger.debug(msg)
 
 
 def download_url(url, file_name, ca_file=CA_FILE, chunk_size=CHUNK_SIZE):
@@ -164,7 +164,7 @@ def upload_url(url, filename, ca_file=CA_FILE, chunk_size=CHUNK_SIZE):
     headers = {}
     index = 0
     offset = 0
-    content_name = str(filename)
+    # content_name = str(filename)
     content_path = os.path.abspath(filename)
     content_size = os.stat(content_path).st_size
     t = transfer_bar(content_size)
@@ -183,7 +183,7 @@ def upload_url(url, filename, ca_file=CA_FILE, chunk_size=CHUNK_SIZE):
             )
 
             index = offset
-            r = requests.put(url, data=chunk, headers=headers, verify=ca_file, stream=True)
+            # r = requests.put(url, data=chunk, headers=headers, verify=ca_file, stream=True)
             chunk = h.read(chunk_size)
             t.show_progress(offset)
 
@@ -191,7 +191,7 @@ def upload_url(url, filename, ca_file=CA_FILE, chunk_size=CHUNK_SIZE):
 
 
 def copy_file(source_file, dest_file, chunk_size=CHUNK_SIZE):
-    content_path = os.path.abspath(source_file)
+    # content_path = os.path.abspath(source_file)
     content_size = os.stat(source_file).st_size
     t = transfer_bar(content_size)
 
@@ -210,7 +210,7 @@ def copy_file(source_file, dest_file, chunk_size=CHUNK_SIZE):
     dest_f.close()
 
 
-class disk:
+class Disk:
     def __init__(self, disk_info, disk_service, oh, chunk_size=CHUNK_SIZE):
         self.disk_info = disk_info
         self.disk_service = disk_service
@@ -236,9 +236,6 @@ class disk:
 
     def provisioned_size(self):
         return self.disk_info.provisioned_size
-
-    def name(self):
-        return self.disk_info.name
 
     def status(self):
         return self.disk_info.status
@@ -281,8 +278,8 @@ class disk:
         }
 
     def upload(self, filename):
-        content_path = os.path.abspath(filename)
-        size = os.stat(content_path).st_size
+        # content_path = os.path.abspath(filename)
+        # size = os.stat(content_path).st_size
         transfers_service = self.transfers_service
         transfer = transfers_service.add(
             types.ImageTransfer(
@@ -307,7 +304,7 @@ class disk:
         transfer_service.finalize()
 
 
-class snapshot_disk(disk):
+class SnapshotDisk(Disk):
     def __init__(
         self,
         disk_info,
@@ -350,8 +347,8 @@ class snapshot_disk(disk):
         transfer_service.finalize()
 
     def upload(self, filename):
-        content_path = os.path.abspath(filename)
-        size = os.stat(content_path).st_size
+        # content_path = os.path.abspath(filename)
+        # size = os.stat(content_path).st_size
         transfers_service = self.transfers_service
         transfer = transfers_service.add(
             types.ImageTransfer(
@@ -378,7 +375,7 @@ class snapshot_disk(disk):
         return disk_info.status
 
 
-class snapshot:
+class Snapshot:
     def __init__(self, snapshot_info, snapshot_service, oh):
         self.snapshot_info = snapshot_info
         self.snapshot_service = snapshot_service
@@ -403,13 +400,13 @@ class snapshot:
 
         for disk_info in disks:
             disk_service = self.disks_service.disk_service(disk_info.id)
-            all_disks.append(snapshot_disk(disk_info, disk_service, self.oh))
+            all_disks.append(SnapshotDisk(disk_info, disk_service, self.oh))
 
         return all_disks
 
     def download_disks(self, download_dir=DOWNLOAD_DIRECTORY):
         for disk in self.all_disks():
-            l.info("Downloading disk %s with image id %s" % (disk.id(), disk.image_id()))
+            main_logger.info("Downloading disk %s with image id %s" % (disk.id(), disk.image_id()))
             disk.download(download_dir=download_dir)
 
     def date(self):
@@ -448,7 +445,7 @@ class VM:
 
         for snapshot_info in snapshots:
             snapshot_service = self.snapshots_service.snapshot_service(snapshot_info.id)
-            all_snapshots.append(snapshot(snapshot_info, snapshot_service, self.oh))
+            all_snapshots.append(Snapshot(snapshot_info, snapshot_service, self.oh))
 
         if omit_active:
             all_snapshots = [x for x in all_snapshots if x.type() != types.SnapshotType("active")]
@@ -468,10 +465,12 @@ class VM:
         return self.__str__()
 
     def download_snapshot_disks(self, snapshot_name, download_dir=DOWNLOAD_DIRECTORY):
-        l.info("Downloading vm disks for selected snapshot for vm %s..." % self.name())
+        main_logger.info("Downloading vm disks for selected snapshot for vm %s..." % self.name())
         for snap in self.all_snapshots():
             if snap.description() == snapshot_name:
-                l.info("-snapshot description %s, with id: %s" % (snap.description(), snap.id()))
+                main_logger.info(
+                    "-snapshot description %s, with id: %s" % (snap.description(), snap.id())
+                )
                 snap.download_disks(download_dir=download_dir)
 
     def add_disk(
@@ -514,7 +513,7 @@ class VM:
                 break
 
         disk_info = disk_service.get()
-        return disk(disk_info, disk_service, self.oh)
+        return Disk(disk_info, disk_service, self.oh)
 
     def settings(self):
         vm_info = self.vm_info
@@ -527,12 +526,12 @@ class VM:
 
         settings["snapshot_sequence"] = []
 
-        l.info("Reading snapshots for vm %s" % self.name())
+        main_logger.info("Reading snapshots for vm %s" % self.name())
         settings["disk_info"] = {}
 
         for snapshot in self.all_snapshots(omit_active=True):
             element = {"id": snapshot.id(), "description": snapshot.description()}
-            l.debug(
+            main_logger.debug(
                 "Discovered snapshot with id %s and description %s"
                 % (snapshot.id(), snapshot.description())
             )
@@ -541,11 +540,11 @@ class VM:
             for disk in snapshot.all_disks():
                 settings["disk_info"][disk.image_id()] = disk.information()
 
-                l.debug("Discovered disk with:")
-                l.debug(" -image id: %s" % disk.image_id())
-                l.debug(" -disk id: %s" % disk.id())
-                l.debug(" -actual size: %s" % disk.actual_size())
-                l.debug(" -provisioned size: %s" % disk.provisioned_size())
+                main_logger.debug("Discovered disk with:")
+                main_logger.debug(" -image id: %s" % disk.image_id())
+                main_logger.debug(" -disk id: %s" % disk.id())
+                main_logger.debug(" -actual size: %s" % disk.actual_size())
+                main_logger.debug(" -provisioned size: %s" % disk.provisioned_size())
 
         return settings
 
@@ -585,7 +584,7 @@ class VM:
         for snapshot_info in snapshots:
             if snapshot_info.description == description:
                 snapshot_service = self.snapshots_service.snapshot_service(snapshot_info.id)
-                return snapshot(snapshot_info, snapshot_service, self.oh)
+                return Snapshot(snapshot_info, snapshot_service, self.oh)
 
     def status(self):
         return self.vm_service.get().status
@@ -642,7 +641,7 @@ class VM:
         for snapshot in settings["snapshot_sequence"]:
             s_id = snapshot["id"]
             description = snapshot["description"]
-            l.debug("debug", "Snapshot %s, description: %s" % (s_id, description))
+            main_logger.debug("debug", "Snapshot %s, description: %s" % (s_id, description))
             disk_attachments = []
             base_disks = []
             non_base_disks = []
@@ -668,7 +667,7 @@ class VM:
             for base_disk in base_disks:
                 new_disk = self.add_base_disk(base_disk, storage_domain=storage_domain)
                 self.disk_mappings[base_disk["id"]] = new_disk.id()
-                l.debug(
+                main_logger.debug(
                     "Included base image with id: %s as a new disk with id %s (image id:%s) in"
                     " snapshot attachments" % (base_disk["id"], new_disk.id(), new_disk.image_id())
                 )
@@ -679,7 +678,7 @@ class VM:
                 image_id = non_base_disk["image_id"]
                 disk_id = non_base_disk["id"]
                 new_disk_id = self.disk_mappings[disk_id]
-                l.debug("Adding non-base image with id: %s as a new image" % image_id)
+                main_logger.debug("Adding non-base image with id: %s as a new image" % image_id)
                 disk_attachments.append(self.non_base_disk_attachment(non_base_disk, new_disk_id))
 
             self.add_snapshot(description=description, disk_attachments=disk_attachments)
@@ -770,7 +769,7 @@ def qemu_chains(directory, filenames="*"):
         ]
         children.append(child_list[0])
 
-    for disk_id, disk in depths.items():
+    for disk_id, _ in depths.items():
         ancestor = [x["ancestor"] for k, x in depths.items() if k == disk_id][0]
         index = [x["depth"] for k, x in depths.items() if k == disk_id][0]
         chains[ancestor][index] = disk_id
@@ -779,24 +778,24 @@ def qemu_chains(directory, filenames="*"):
 
 
 def commit_chains(directory=SAVE_DIRECTORY):
-    l.info("Beginning commits of disk chains in directory %s" % directory)
+    main_logger.info("Beginning commits of disk chains in directory %s" % directory)
     chains = qemu_chains(directory)
-    l.info("Chain information:")
+    main_logger.info("Chain information:")
     for chain in chains:
-        l.debug(chain)
+        main_logger.debug(chain)
 
-    for key, chain in chains.items():
-        for i, disk in enumerate(reversed(chain)):
+    for _, chain in chains.items():
+        for _, disk in enumerate(reversed(chain)):
             if disk != chain[0]:
                 filename = os.path.join(directory, disk)
-                l.debug("Committing %s" % filename)
+                main_logger.debug("Committing %s" % filename)
                 qemu_commit(filename)
-                l.debug("Commited %s" % filename)
+                main_logger.debug("Commited %s" % filename)
 
     return chains
 
 
-class ovirt_handler:
+class OvirtHandler:
     def __init__(
         self,
         url=URL,
@@ -818,14 +817,14 @@ class ovirt_handler:
         self.ca_file = ca_file
 
     def terminate_with_error(self, msg, exc=None):
-        l.error(msg + ". Terminating.")
+        main_logger.error(msg + ". Terminating.")
         if exc:
-            l.debug(exc, exc_info=True)
+            main_logger.debug(exc, exc_info=True)
             raise exc
 
     def get_vms(self, query=None):
         if query is None:
-            vms = self.vm_service.list(all_content=True)
+            vms = self.vms_service.list(all_content=True)
         else:
             vms = self.vms_service.list(search=query, all_content=True)
 
@@ -887,14 +886,14 @@ class ovirt_handler:
         vm_service = self.vms_service.vm_service(vm_info.id)
         vm = VM(vm_info, vm_service, self)
 
-        l.info("Attempting chain commit")
+        main_logger.info("Attempting chain commit")
         chains = commit_chains(directory=directory)
         for base_image_id in chains:
             filename = os.path.join(directory, base_image_id)
-            disk_info = qemu_info(filename)
+            # disk_info = qemu_info(filename)
             base_disk = settings["disk_info"][base_image_id]
             new_disk = vm.add_base_disk(base_disk, storage_domain=storage_domain)
-            l.info("Uploading %s" % filename)
+            main_logger.info("Uploading %s" % filename)
             new_disk.upload(filename)
 
         return vm

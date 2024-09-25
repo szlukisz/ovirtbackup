@@ -1,6 +1,6 @@
 import argparse
 import configparser
-from backup_lib import ovirt_handler, copy_file, l, VM_LOGGER_FILE
+from backup_lib import OvirtHandler, copy_file, main_logger, VM_LOGGER_FILE
 import sys
 import os
 from datetime import datetime
@@ -23,15 +23,15 @@ RESTORE_PARAMS = ["storage_domain", "cluster_name", "template", "new_vm_name"]
 BACKUP_PARAMS = ["backup_snapshot_description", "backup_snapshot_description_temp"]
 COPY_TO_LOCAL_PARAMS = ["local_directory"]
 GLOBAL_LOGGER_FILE = "global_savior.log"
-MAIL_SUBJECT = "[OLVM_BACKUP_KSAT] "+"{{mode}} of {{vm_name}} on {{date}}: {{status}}"
+MAIL_SUBJECT = "[OLVM_BACKUP_KSAT] {{mode}} of {{vm_name}} on {{date}}: {{status}}"
 MAIL_TEMPLATE = "mailbody.txt"
 
 
 def get_config(setup_file):
     config = configparser.ConfigParser(interpolation=None)
-    l.info("Reading configuration file %s..." % setup_file)
+    main_logger.info("Reading configuration file %s..." % setup_file)
     config.read(setup_file)
-    l.info("Read configuration file %s." % setup_file)
+    main_logger.info("Read configuration file %s." % setup_file)
     return config
 
 
@@ -59,19 +59,20 @@ def parse_arguments():
 def check_directory(directory, create=True):
     if not os.path.isdir(directory):
         if create:
-            l.warning("Directory %s can not be found. Attempting to create." % directory)
+            main_logger.warning("Directory %s can not be found. Attempting to create." % directory)
             os.makedirs(directory)
-            l.info("Created directory %s" % directory)
+            main_logger.info("Created directory %s" % directory)
         else:
             msg = "Directory %s can not be found" % directory
             raise ValueError(msg)
 
 
-class savior_job:
+class SaviorJob:
     def __init__(self, mode, setup_file):
-        l.info("...Savior job initializing...")
+        main_logger.info("...Savior job initializing...")
         self.config = get_config(setup_file)
         self.mode = mode
+        self.status = "UNKNOWN"
 
         self.check_sections()
         self.get_config_params()
@@ -87,7 +88,7 @@ class savior_job:
         if self.mode == "backuptemp":
             # self.snapshot_name = self.params['backup_snapshot_description'] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
             self.snapshot_name = self.params["backup_snapshot_description"]
-            l.info("Working on backup mode for VM %s", self.vm_name)
+            main_logger.info("Working on backup mode for VM %s", self.vm_name)
             # self.check_backup_directory()
             self.get_backup_vm()
             self.remove_backup_snapshot()
@@ -95,8 +96,8 @@ class savior_job:
 
         elif self.mode == "backup":
             # self.snapshot_name = self.params['backup_snapshot_description'] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
-            self.snapshot_name = self.params['backup_snapshot_description']
-            l.info("Working on backup mode for VM %s", self.vm_name)
+            self.snapshot_name = self.params["backup_snapshot_description"]
+            main_logger.info("Working on backup mode for VM %s", self.vm_name)
             self.check_backup_directory()
             self.get_backup_vm()
             self.remove_backup_snapshot()
@@ -106,9 +107,9 @@ class savior_job:
             ##self.remove_backup_snapshot()
 
         elif self.mode == "restore":
-            l.info("Working on restore mode for VM %s", self.vm_name)
+            main_logger.info("Working on restore mode for VM %s", self.vm_name)
             self.new_vm_name = self.params["new_vm_name"]
-            l.info("VM will be restored under the name %s", self.new_vm_name)
+            main_logger.info("VM will be restored under the name %s", self.new_vm_name)
             self.get_vm_settings()
             self.check_for_restored_vm()
             self.copy_to_local()
@@ -161,9 +162,9 @@ class savior_job:
             self.check_missing(RESTORE_PARAMS)
 
     def connect_to_api(self):
-        l.info("Connecting to Ovirt API...")
+        main_logger.info("Connecting to Ovirt API...")
         try:
-            self.oh = ovirt_handler(
+            self.oh = OvirtHandler(
                 url=self.params["ovirt_url"],
                 username=self.params["username"],
                 password=self.params["password"],
@@ -172,9 +173,9 @@ class savior_job:
                 chunk_size=self.params["chunk_size"],
             )
             self.oh.connection.authenticate()
-            l.info("Successfully opened a session with the Ovirt API.")
+            main_logger.info("Successfully opened a session with the Ovirt API.")
 
-        except Exception as exc:
+        except Exception as _:
             msg = "An error occured contacting the Ovirt API"
             raise ValueError(msg)
 
@@ -187,54 +188,59 @@ class savior_job:
 
     def get_backup_vm(self):
         vm_name = self.params["vm_name"]
-        l.info("Seeking VM with name %s..." % vm_name)
+        main_logger.info("Seeking VM with name %s..." % vm_name)
         vm = self.oh.get_vm_by_name(vm_name)
         if not vm:
             msg = "VM with name %s could not be found through the ovirt API" % vm_name
             raise ValueError(msg)
         else:
             self.vm = vm
-            l.info("Found VM with name %s." % vm_name)
+            main_logger.info("Found VM with name %s." % vm_name)
 
     def check_backup_directory(self):
-        vm_name = self.params["vm_name"]
+        # vm_name = self.params["vm_name"]
         if os.path.isdir(self.working_directory):
-            l.warning(
+            main_logger.warning(
                 "Directory %s already exists. Contents may be overwritten."
                 % self.working_directory
             )
         else:
-            check_and_create_directory(self.working_directory)
+            self.check_and_create_directory(self.working_directory)
+
+    def check_and_create_directory(self, directory):
+        if not os.path.exists(directory):
+            main_logger.info(f"Creating directory with appriopriate name: {directory}")
+            os.mkdir(directory)
 
     def add_backup_snapshot(self):
         sd = self.snapshot_name
         vm_name = self.params["vm_name"]
-        l.info("Creating snapshot %s on VM %s" % (sd, vm_name))
+        main_logger.info("Creating snapshot %s on VM %s" % (sd, vm_name))
         self.vm.add_snapshot(sd)
-        l.info("Snapshot %s added on VM %s." % (sd, vm_name))
+        main_logger.info("Snapshot %s added on VM %s." % (sd, vm_name))
 
     def save_vm_info(self):
         vm_name = self.params["vm_name"]
-        l.info("Saving information for VM %s..." % vm_name)
+        main_logger.info("Saving information for VM %s..." % vm_name)
         self.vm.save_settings(save_dir=self.working_directory)
 
-        l.info("Information saved for VM %s" % vm_name)
+        main_logger.info("Information saved for VM %s" % vm_name)
 
     def download_disks(self):
         vm_name = self.params["vm_name"]
-        l.info("Downloading disks of VM %s..." % vm_name)
-        l.info(f"Downloadind disk of VM for snapshot {self.snapshot_name}")
+        main_logger.info("Downloading disks of VM %s..." % vm_name)
+        main_logger.info(f"Downloadind disk of VM for snapshot {self.snapshot_name}")
         self.vm.download_snapshot_disks(
             snapshot_name=self.snapshot_name, download_dir=self.working_directory
         )
-        l.info("Disks downloaded successfully.")
+        main_logger.info("Disks downloaded successfully.")
 
     def remove_backup_snapshot(self):
         sd = self.snapshot_name
         vm_name = self.params["vm_name"]
-        l.info("Removing snapshot %s on VM %s" % (sd, vm_name))
+        main_logger.info("Removing snapshot %s on VM %s" % (sd, vm_name))
         self.vm.remove_snapshot(sd)
-        l.info("Snapshot removed.")
+        main_logger.info("Snapshot removed.")
 
     def get_vm_settings(self):
         vm_name = self.params["vm_name"]
@@ -249,7 +255,7 @@ class savior_job:
         local_directory = self.local_directory
         working_directory = self.working_directory
 
-        l.info(
+        main_logger.info(
             "Copying discs from working directory %s to temp directory %s"
             % (working_directory, local_directory)
         )
@@ -262,10 +268,10 @@ class savior_job:
         for file in files:
             source_file = os.path.join(working_directory, file)
             dest_file = os.path.join(local_directory, file)
-            l.info("Transfering %s to %s" % (source_file, dest_file))
+            main_logger.info("Transfering %s to %s" % (source_file, dest_file))
             copy_file(source_file, dest_file)
 
-        l.info("Discs copied to local directory.")
+        main_logger.info("Discs copied to local directory.")
 
     def check_for_restored_vm(self):
         if self.oh.get_vm_by_name(self.new_vm_name):
@@ -276,7 +282,7 @@ class savior_job:
             )
 
     def send_mail(self):
-        l.info("Sending email notification")
+        main_logger.info("Sending email notification")
         server = self.params["smtp_server"]
         port = self.params["smtp_port"]
         password = self.params["smtp_password"]
@@ -305,12 +311,12 @@ class savior_job:
 if __name__ == "__main__":
     try:
         v = parse_arguments()
-        c = savior_job(v["mode"], v["setup_file"])
+        c = SaviorJob(v["mode"], v["setup_file"])
         c.execute()
         c.status = "SUCCESS!"
         c.send_mail()
     except Exception as exc:
-        l.error(exc, exc_info=exc)
+        main_logger.error(exc, exc_info=exc)
         if c:
             c.status = "ERROR!"
             c.send_mail()
