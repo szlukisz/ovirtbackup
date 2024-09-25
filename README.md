@@ -5,6 +5,7 @@
 _Ovirtsavior_ is an old fashioned backup/restore tool for the Ovirt virtualization platform. It can be used to:
 
 - download the disks of a running VM to your local file system (backup mode).
+- create snaphot of a VM (backuptemp mode).
 - upload the disks of a previously backed up VM to a new Ovirt VM (restore mode).
 
 You can use `rclone` to mount a remote directory to your local storage (Google Drive, etc). Use this with caution, it is probably much safer to save it to a local disc or NFS mount.
