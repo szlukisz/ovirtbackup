@@ -23,7 +23,7 @@ RESTORE_PARAMS = ["storage_domain", "cluster_name", "template", "new_vm_name"]
 BACKUP_PARAMS = ["backup_snapshot_description", "backup_snapshot_description_temp"]
 COPY_TO_LOCAL_PARAMS = ["local_directory"]
 GLOBAL_LOGGER_FILE = "global_savior.log"
-MAIL_SUBJECT = "{{mode}} of {{vm_name}} on {{date}}: {{status}}"
+MAIL_SUBJECT = "[OLVM_BACKUP_KSAT] "+"{{mode}} of {{vm_name}} on {{date}}: {{status}}"
 MAIL_TEMPLATE = "mailbody.txt"
 
 
