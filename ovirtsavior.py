@@ -1,4 +1,6 @@
 import argparse
+from paramiko import SSHClient
+from paramiko.ssh_exception import NoValidConnectionsError
 import configparser
 from backup_lib import OvirtHandler, copy_file, main_logger, VM_LOGGER_FILE
 import sys
@@ -7,7 +9,7 @@ from datetime import datetime
 from mailer import send_mail
 
 REQUIRED_SECTIONS = ["CONNECTION", "DIRECTORIES", "TRANSFER", "VM", "MAIL"]
-BACKUP_SECTIONS = []
+BACKUP_SECTIONS = ["SNAPSHOT", "SSH"]
 RESTORE_SECTIONS = ["RESTORATION"]
 
 REQUIRED_PARAMS = [
@@ -20,7 +22,13 @@ REQUIRED_PARAMS = [
     "vm_name",
 ]
 RESTORE_PARAMS = ["storage_domain", "cluster_name", "template", "new_vm_name"]
-BACKUP_PARAMS = ["backup_snapshot_description", "backup_snapshot_description_temp"]
+BACKUP_PARAMS = [
+    "backup_snapshot_description",
+    "ssh_ip",
+    "ssh_username",
+    "ssh_password",
+    "ssh_commands",
+]
 COPY_TO_LOCAL_PARAMS = ["local_directory"]
 GLOBAL_LOGGER_FILE = "global_savior.log"
 MAIL_SUBJECT = "[OLVM_BACKUP_KSAT] {{mode}} of {{vm_name}} on {{date}}: {{status}}"
@@ -73,6 +81,7 @@ class SaviorJob:
         self.config = get_config(setup_file)
         self.mode = mode
         self.status = "UNKNOWN"
+        self.command_counter = 0
 
         self.check_sections()
         self.get_config_params()
@@ -85,26 +94,32 @@ class SaviorJob:
         self.connect_to_api()
 
     def execute(self):
-        if self.mode == "backuptemp":
+        if self.mode in ["backuptemp", "backup"]:
             # self.snapshot_name = self.params['backup_snapshot_description'] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
             self.snapshot_name = self.params["backup_snapshot_description"]
             main_logger.info("Working on backup mode for VM %s", self.vm_name)
+
+            # ssh connection
+            self.establish_connection_ssh()
+
             # self.check_backup_directory()
             self.get_backup_vm()
             self.remove_backup_snapshot()
+
+            # start backup mode on server
+            self.execute_command_ssh()
+
             self.add_backup_snapshot()
 
-        elif self.mode == "backup":
-            # self.snapshot_name = self.params['backup_snapshot_description'] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
-            self.snapshot_name = self.params["backup_snapshot_description"]
-            main_logger.info("Working on backup mode for VM %s", self.vm_name)
-            self.check_backup_directory()
-            self.get_backup_vm()
-            self.remove_backup_snapshot()
-            self.add_backup_snapshot()
-            self.download_disks()
-            self.save_vm_info()
-            ##self.remove_backup_snapshot()
+            # stop backup mode
+            self.execute_command_ssh()
+            self.close_connection_ssh()
+
+            if self.mode == "backup":
+                self.check_backup_directory()
+                self.download_disks()
+                self.save_vm_info()
+                ##self.remove_backup_snapshot()
 
         elif self.mode == "restore":
             main_logger.info("Working on restore mode for VM %s", self.vm_name)
@@ -152,7 +167,10 @@ class SaviorJob:
         self.params = {}
         for section in self.config.sections():
             for key, value in self.config[section].items():
-                self.params[key] = value
+                if key == "ssh_commands":
+                    self.params[key] = value.split(";")
+                else:
+                    self.params[key] = value
 
     def check_params(self):
         self.check_missing(REQUIRED_PARAMS)
@@ -185,6 +203,41 @@ class SaviorJob:
         else:
             check_directory(self.working_directory)
             check_directory(self.local_directory, create=True)
+
+    def establish_connection_ssh(self):
+        ip = self.params["ssh_ip"]
+        username = self.params["ssh_username"]
+        password = self.params["ssh_password"]
+        main_logger.info(f"Establishing ssh connection to server with ip: {ip}")
+        try:
+            self.client = SSHClient()
+            self.client.load_system_host_keys()
+            self.client.connect(ip, username=username, password=password)
+            main_logger.info("Connected successfully")
+        except NoValidConnectionsError as err:
+            main_logger.error(f"Failed to establish a connection: {err}")
+
+    def execute_command_ssh(self):
+        if self.command_counter >= len(self.params["ssh_commands"]):
+            main_logger.warning("No more commands to execute, closing connection...")
+            self.close_connection_ssh()
+        command = self.params["ssh_commands"][self.command_counter]
+        main_logger.info(f"Executing command: {command}")
+        stdin, stdout, stderr = self.client.exec_command(command)
+        main_logger.info(f'STDOUT: {stdout.read().decode("utf8")}')
+        main_logger.info(f'STDERR: {stderr.read().decode("utf8")}')
+
+        self.command_counter += 1
+        stdin.close()
+        stdout.close()
+        stderr.close()
+
+    def close_connection_ssh(self):
+        if self.client:
+            self.client.close()
+            main_logger.info(f"Closed ssh connection, ssh client: {self.client}")
+        else:
+            main_logger.warning("No currently running ssh connection")
 
     def get_backup_vm(self):
         vm_name = self.params["vm_name"]
