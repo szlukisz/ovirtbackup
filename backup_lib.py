@@ -67,7 +67,6 @@ def rate_str(rate):
     elif log10(rate) < 6:
         return "%3.1f Kb/s" % (rate / 1e3)
     elif log10(rate) < 9:
-        tst
         return "%3.1f Mb/s" % (rate / 1e6)
     else:
         return "%3.2f Gb/s" % (rate / 1e9)
