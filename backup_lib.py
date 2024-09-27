@@ -67,6 +67,7 @@ def rate_str(rate):
     elif log10(rate) < 6:
         return "%3.1f Kb/s" % (rate / 1e3)
     elif log10(rate) < 9:
+        tst
         return "%3.1f Mb/s" % (rate / 1e6)
     else:
         return "%3.2f Gb/s" % (rate / 1e9)
@@ -810,7 +811,7 @@ class OvirtHandler:
         )
 
         self.system_service = self.connection.system_service()
-        self.disks_service = self.system_service.disks_service()
+        self.dmeineisks_service = self.system_service.disks_service()
         self.vms_service = self.system_service.vms_service()
         self.transfers_service = self.system_service.image_transfers_service()
         self.storage_domains_service = self.system_service.storage_domains_service()

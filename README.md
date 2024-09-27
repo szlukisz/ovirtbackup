@@ -86,7 +86,8 @@ backup_snapshot_description : SAVIOR_BACKUP_SNAPSHOT
 ssh_ip : ip_address
 ssh_username : username_to_connect
 ssh_password : user_password
-ssh_commands : first_command;second_command
+ssh_command_0 : command
+ssh_commadn_1 : command
 
 
 [TRANSFER]
@@ -127,11 +128,12 @@ This section describes the parameters used during the restoration process.
 - `backup_snapshot_description` is the name of a temporary snapshot used to backup VMs (e.g. SAVIOR_BACKUP_SNAPSHOT)
 
 ### SSH section
-This section describes the parameters used during the backup process.
+This section describes the parameters used during the backup process. If these parameters are not specified, this section will be skipped.
 - `ssh_ip` : ip address of the vm you want to execute command on
 - `ssh_username` : username used to connect to this vm
 - `ssh_password` : password of this user
-- `ssh_commands` : commands to execute on the vm seperated by ';'
+- `ssh_command_0` : commands to execute before adding snapshot to enter backup mode on vm
+- `ssh_command_1` : commands to finish backup mode
 
 #### Transfer section
 - `chunk_size` : size of the blocks to be used in the disk transfers in bytes. Usually `1048576` is adequate.

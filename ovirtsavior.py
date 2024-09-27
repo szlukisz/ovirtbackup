@@ -23,13 +23,7 @@ REQUIRED_PARAMS = [
     "vm_name",
 ]
 RESTORE_PARAMS = ["storage_domain", "cluster_name", "template", "new_vm_name"]
-BACKUP_PARAMS = [
-    "backup_snapshot_description",
-    "ssh_ip",
-    "ssh_username",
-    "ssh_password",
-    "ssh_commands",
-]
+BACKUP_PARAMS = ["backup_snapshot_description"]
 COPY_TO_LOCAL_PARAMS = ["local_directory"]
 GLOBAL_LOGGER_FILE = "global_savior.log"
 MAIL_SUBJECT = "[OLVM_BACKUP_KSAT] {{mode}} of {{vm_name}} on {{date}}: {{status}}"
@@ -82,7 +76,7 @@ class SaviorJob:
         self.config = get_config(setup_file)
         self.mode = mode
         self.status = "UNKNOWN"
-        self.command_counter = 0
+        self.successfully_connected = False
 
         self.check_sections()
         self.get_config_params()
@@ -95,32 +89,55 @@ class SaviorJob:
         self.connect_to_api()
 
     def execute(self):
-        if self.mode in ["backuptemp", "backup"]:
+        # mode backuptemp -> just do snapshot without downloading disk
+        if self.mode == "backuptemp":
+            # self.snapshot_name = self.params['backup_snapshot_description'] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
+            self.snapshot_name = self.params["backup_snapshot_description"]
+            main_logger.info("Working on backuptemp mode for VM %s", self.vm_name)
+            self.get_backup_vm()
+
+            # ssh connection
+            self.successfully_connected = self.establish_connection_ssh()
+
+            # self.check_backup_directory()
+            self.remove_backup_snapshot()
+
+            # start backup mode on server and add snapshot
+            self.execute_command_ssh(0)
+            self.add_backup_snapshot()
+
+            # stop backup mode and close connection
+            self.execute_command_ssh(1)
+            self.close_connection_ssh()
+
+        # mode backup -> to download disk
+        elif self.mode == "backup":
             # self.snapshot_name = self.params['backup_snapshot_description'] + datetime.now().strftime("%m-%d-%Y|%H:%M:%S")
             self.snapshot_name = self.params["backup_snapshot_description"]
             main_logger.info("Working on backup mode for VM %s", self.vm_name)
+            self.get_backup_vm()
 
+            """            
+            Uncomment this part to also implement adding snapshot for this mode
             # ssh connection
-            self.establish_connection_ssh()
+            self.successfully_connected = self.establish_connection_ssh()
 
             # self.check_backup_directory()
-            self.get_backup_vm()
             self.remove_backup_snapshot()
 
-            # start backup mode on server
-            self.execute_command_ssh()
-
+            # start backup mode on server and add snapshot
+            self.execute_command_ssh(0)
             self.add_backup_snapshot()
 
-            # stop backup mode
-            self.execute_command_ssh()
+            # stop backup mode and close connection
+            self.execute_command_ssh(1)
             self.close_connection_ssh()
+            """
 
-            if self.mode == "backup":
-                self.check_backup_directory()
-                self.download_disks()
-                self.save_vm_info()
-                ##self.remove_backup_snapshot()
+            self.check_backup_directory()
+            self.download_disks()
+            self.save_vm_info()
+            ##self.remove_backup_snapshot()
 
         elif self.mode == "restore":
             main_logger.info("Working on restore mode for VM %s", self.vm_name)
@@ -168,10 +185,7 @@ class SaviorJob:
         self.params = {}
         for section in self.config.sections():
             for key, value in self.config[section].items():
-                if key == "ssh_commands":
-                    self.params[key] = value.split(";")
-                else:
-                    self.params[key] = value
+                self.params[key] = value
 
     def check_params(self):
         self.check_missing(REQUIRED_PARAMS)
@@ -209,6 +223,11 @@ class SaviorJob:
         ip = self.params["ssh_ip"]
         username = self.params["ssh_username"]
         password = self.params["ssh_password"]
+        if any(not param for param in (ip, username, password)):
+            main_logger.info(
+                "Missing one of ssh parameters to establish ssh connection, skipping ahead..."
+            )
+            return False
         main_logger.info(f"Establishing ssh connection to server with ip: {ip}")
         try:
             self.client = SSHClient()
@@ -216,20 +235,35 @@ class SaviorJob:
             self.client.set_missing_host_key_policy(AutoAddPolicy())
             self.client.connect(ip, username=username, password=password)
             main_logger.info("Connected successfully")
+            return True
         except NoValidConnectionsError as err:
-            main_logger.error(f"Failed to establish a connection: {err}")
+            main_logger.error(f"Failed to establish a connection to host: {ip}, error: {err}")
+            return False
+        except Exception as err:
+            main_logger.error(
+                f"An unexpected error occured during connecting to vm with ssh. Error: {err}"
+            )
+            return False
 
-    def execute_command_ssh(self):
-        if self.command_counter >= len(self.params["ssh_commands"]):
-            main_logger.warning("No more commands to execute, closing connection...")
+    def execute_command_ssh(self, number_of_command: int):
+        if not self.successfully_connected:
+            main_logger.warning("Cannot execute command, ssh connection not established properly")
             self.close_connection_ssh()
-        command = self.params["ssh_commands"][self.command_counter]
+        if number_of_command == 0:
+            command = self.params["ssh_command_0"]
+        elif number_of_command == 1:
+            command = self.params["ssh_command_1"]
+        else:
+            main_logger.warning("No command with this number")
+        if not command:
+            main_logger.warning("Command is empty, skipping ahead...")
+            return
+
         main_logger.info(f"Executing command: {command}")
         stdin, stdout, stderr = self.client.exec_command(command)
         main_logger.info(f'STDOUT: {stdout.read().decode("utf8")}')
         main_logger.info(f'STDERR: {stderr.read().decode("utf8")}')
 
-        self.command_counter += 1
         stdin.close()
         stdout.close()
         stderr.close()
@@ -237,7 +271,7 @@ class SaviorJob:
     def close_connection_ssh(self):
         if self.client:
             self.client.close()
-            main_logger.info(f"Closed ssh connection, ssh client: {self.client}")
+            main_logger.info("Closed ssh connection, ssh client")
         else:
             main_logger.warning("No currently running ssh connection")
 
