@@ -87,7 +87,7 @@ ssh_ip : ip_address
 ssh_username : username_to_connect
 ssh_password : user_password
 ssh_command_0 : command
-ssh_commadn_1 : command
+ssh_command_1 : command
 
 
 [TRANSFER]
