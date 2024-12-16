@@ -45,6 +45,14 @@ apt-get --assume-yes install gcc \
     qemu-utils
 pip3 install ovirt-engine-sdk-python
 ```
+
+On node OVS Server OEL8.10 with OLVM4.5
+```bash
+pip3 install --upgrade pip
+pip3 install setuptools-rust
+pip3 install paramiko
+```
+
 ## Modes
 There are two modes you can use the `ovirt-savior` script: backup and restore. In backup mode, you download the VM disks to a local or remote folder. In restore mode, you create a VM using the OVirt API and then upload the discs. You have the option of collapsing the original VM's snapshots on the restored VM and this is probably your safest bet on getting the VM to work again. There seems to be a bug in OVirt that extends the snapshot disc image beyond its maximum size and although this does not affect the original running VM, it prohibits uploading the discs to the restored VMs.
 
